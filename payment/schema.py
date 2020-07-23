@@ -12,12 +12,20 @@ from .models import Payment, PaymentDetail
 from .gql_queries import *  # lgtm [py/polluting-import]
 from .gql_mutations import *  # lgtm [py/polluting-import]
 
+
 class Query(graphene.ObjectType):
-    payments = OrderedDjangoFilterConnectionField(PaymentGQLType)
-    payment_details = OrderedDjangoFilterConnectionField(PaymentDetailGQLType)
+    payments = OrderedDjangoFilterConnectionField(
+        PaymentGQLType,
+        orderBy=graphene.List(of_type=graphene.String),
+    )
+    payment_details = OrderedDjangoFilterConnectionField(
+        PaymentDetailGQLType,
+        orderBy=graphene.List(of_type=graphene.String),
+    )
     payments_by_premiums = OrderedDjangoFilterConnectionField(
         PaymentGQLType,
-        premium_uuids=graphene.List(graphene.String, required=True)
+        premium_uuids=graphene.List(graphene.String, required=True),
+        orderBy=graphene.List(of_type=graphene.String),
     )
 
     def resolve_payments(self, info, **kwargs):
@@ -34,5 +42,6 @@ class Query(graphene.ObjectType):
         if not info.context.user.has_perms(PaymentConfig.gql_query_payments_perms):
             raise PermissionDenied(_("unauthorized"))
         premiums = contribution_models.Premium.objects.values_list('id').filter(Q(uuid__in=kwargs.get('premium_uuids')))
-        detail_ids=PaymentDetail.objects.values_list('payment_id').filter(Q(premium_id__in=premiums), *filter_validity(**kwargs)).distinct()
+        detail_ids = PaymentDetail.objects.values_list('payment_id').filter(Q(premium_id__in=premiums),
+                                                                            *filter_validity(**kwargs)).distinct()
         return Payment.objects.filter(Q(id__in=detail_ids))
