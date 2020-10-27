@@ -5,8 +5,9 @@ import graphene_django_optimizer as gql_optimizer
 
 from .apps import PaymentConfig
 from django.utils.translation import gettext as _
-from core.schema import OrderedDjangoFilterConnectionField
+from core.schema import signal_mutation_module_before_mutating, OrderedDjangoFilterConnectionField
 from contribution import models as contribution_models
+from policy import models as policy_models
 from .models import Payment, PaymentDetail
 # We do need all queries and mutations in the namespace here.
 from .gql_queries import *  # lgtm [py/polluting-import]
@@ -45,3 +46,19 @@ class Query(graphene.ObjectType):
         detail_ids = PaymentDetail.objects.values_list('payment_id').filter(Q(premium_id__in=premiums),
                                                                             *filter_validity(**kwargs)).distinct()
         return Payment.objects.filter(Q(id__in=detail_ids))
+
+
+def on_policy_mutation(sender, **kwargs):
+    errors = []
+    if kwargs.get("mutation_class") == 'DeletePoliciesMutation':
+        uuids = kwargs['data'].get('uuids', [])
+        policies = policy_models.Policy.objects.prefetch_related("premiums__payment_details").filter(uuid__in=uuids).all()
+        for policy in policies:
+            for premium in policy.premiums.all():
+                for payment_detail in premium.payment_details.all():
+                    errors += detach_payment_detail(payment_detail)
+    return errors
+
+
+def bind_signals():
+    signal_mutation_module_before_mutating["policy"].connect(on_policy_mutation)
