@@ -10,8 +10,10 @@ class Payment(core_models.VersionedModel):
     id = models.BigAutoField(db_column='PaymentID', primary_key=True)
     uuid = models.CharField(db_column='PaymentUUID', max_length=36)
 
-    expected_amount = models.DecimalField(db_column='ExpectedAmount', max_digits=18, decimal_places=2, blank=True, null=True)
-    received_amount = models.DecimalField(db_column='ReceivedAmount', max_digits=18, decimal_places=2, blank=True, null=True)
+    expected_amount = models.DecimalField(db_column='ExpectedAmount', max_digits=18, decimal_places=2, blank=True,
+                                          null=True)
+    received_amount = models.DecimalField(db_column='ReceivedAmount', max_digits=18, decimal_places=2, blank=True,
+                                          null=True)
     officer_code = models.CharField(db_column='OfficerCode', max_length=50, blank=True, null=True)
     phone_number = models.CharField(db_column='PhoneNumber', max_length=12, blank=True, null=True)
     request_date = fields.DateField(db_column='RequestDate', blank=True, null=True)
@@ -50,10 +52,14 @@ class PaymentDetail(core_models.VersionedModel):
     policy_stage = models.CharField(db_column='PolicyStage', max_length=1, blank=True, null=True)
     amount = models.DecimalField(db_column='Amount', max_digits=18, decimal_places=2, blank=True, null=True)
 
-    premium = models.ForeignKey(Premium, models.DO_NOTHING, db_column='PremiumID', blank=True, null=True)
+    premium = models.ForeignKey(Premium,
+                                models.SET_NULL, db_column='PremiumID', related_name="payment_details",
+                                blank=True, null=True
+                                )
 
     enrollment_date = fields.DateField(db_column='enrollmentDate', blank=True, null=True)
-    expected_amount = models.DecimalField(db_column='ExpectedAmount', max_digits=18, decimal_places=2, blank=True, null=True)
+    expected_amount = models.DecimalField(db_column='ExpectedAmount', max_digits=18, decimal_places=2, blank=True,
+                                          null=True)
 
     # rowid = models.TextField(db_column='RowID', blank=True, null=True)  # Field name made lowercase. This field type is a guess.
     # auditED, not audit ???
