@@ -3,12 +3,43 @@ import uuid
 from core import fields
 from core import models as core_models
 from django.db import models
-from contribution.models import Premium
+from contribution.models import Premium, PayTypeChoices
+from django.utils.translation import gettext_lazy as _
+
+
+class PaymentStatusChoices(models.IntegerChoices):
+    STATUS_REJECTEDPOSTED_3 = -3, _("STATUS_REJECTEDPOSTED_3")
+    STATUS_REJECTEDPOSTED_2 = -2, _("STATUS_REJECTEDPOSTED_2")
+    STATUS_REJECTEDPOSTED_1 = -1, _("STATUS_REJECTEDPOSTED_1")
+    STATUS_NOTYETCONFIRMED = 1, _("STATUS_NOTYETCONFIRMED")
+    STATUS_POSTED = 2, _("STATUS_POSTED")
+    STATUS_ASSIGNED = 3, _("STATUS_ASSIGNED")
+    STATUS_UNMATCHED = 4, _("STATUS_UNMATCHED")
+    STATUS_PAYMENTMATCHED = 5, _("STATUS_PAYMENTMATCHED")
 
 
 class Payment(core_models.VersionedModel):
+    STATUS_REJECTEDPOSTED_3 = -3
+    STATUS_REJECTEDPOSTED_2 = -2
+    STATUS_REJECTEDPOSTED_1 = -1
+    STATUS_NOTYETCONFIRMED = 1
+    STATUS_POSTED = 2
+    STATUS_ASSIGNED = 3
+    STATUS_UNMATCHED = 4
+    STATUS_PAYMENTMATCHED = 5
+    STATUS_CHOICES=(
+        (STATUS_REJECTEDPOSTED_3, _("REJECTEDPOSTED_3")),
+        (STATUS_REJECTEDPOSTED_2, _("REJECTEDPOSTED_2")),
+        (STATUS_REJECTEDPOSTED_1, _("REJECTEDPOSTED_1")),
+        (STATUS_NOTYETCONFIRMED, _("NOTYETCONFIRMED")),
+        (STATUS_POSTED, _("POSTED")),
+        (STATUS_ASSIGNED, _("ASSIGNED")),
+        (STATUS_UNMATCHED, _("UNMATCHED")),
+        (STATUS_PAYMENTMATCHED, _("PAYMENTMATCHED")),
+    )
+
     id = models.BigAutoField(db_column='PaymentID', primary_key=True)
-    uuid = models.CharField(db_column='PaymentUUID', max_length=36)
+    uuid = models.CharField(db_column='PaymentUUID', max_length=36, default=uuid.uuid4, unique=True)
 
     expected_amount = models.DecimalField(db_column='ExpectedAmount', max_digits=18, decimal_places=2, blank=True,
                                           null=True)
@@ -18,7 +49,7 @@ class Payment(core_models.VersionedModel):
     phone_number = models.CharField(db_column='PhoneNumber', max_length=12, blank=True, null=True)
     request_date = fields.DateField(db_column='RequestDate', blank=True, null=True)
     received_date = fields.DateField(db_column='ReceivedDate', blank=True, null=True)
-    status = models.IntegerField(db_column='PaymentStatus', blank=True, null=True)
+    status = models.IntegerField(db_column='PaymentStatus', blank=True, null=True, choices=PaymentStatusChoices.choices)
 
     transaction_no = models.CharField(db_column='TransactionNo', max_length=50, blank=True, null=True)
     origin = models.CharField(db_column='PaymentOrigin', max_length=50, blank=True, null=True)
@@ -28,7 +59,7 @@ class Payment(core_models.VersionedModel):
     rejected_reason = models.CharField(db_column='RejectedReason', max_length=255, blank=True, null=True)
     date_last_sms = fields.DateField(db_column='DateLastSMS', blank=True, null=True)
     language_name = models.CharField(db_column='LanguageName', max_length=10, blank=True, null=True)
-    type_of_payment = models.CharField(db_column='TypeOfPayment', max_length=50, blank=True, null=True)
+    type_of_payment = models.CharField(db_column='TypeOfPayment', max_length=50, blank=True, null=True, choices=PayTypeChoices.choices)
     transfer_fee = models.DecimalField(db_column='TransferFee', max_digits=18, decimal_places=2, blank=True, null=True)
 
     # rowid = models.TextField(db_column='RowID')
@@ -47,7 +78,7 @@ class PaymentDetail(core_models.VersionedModel):
     # beware putting FKs: product code (,...): need to check if we can/must adapt payment info if code (,...) change
     # i.e. normally, FK is pointing to PK, not to a field
     product_code = models.CharField(db_column='ProductCode', max_length=8, blank=True, null=True)
-    insurance_number = models.CharField(db_column='InsuranceNumber', max_length=12, blank=True, null=True)
+    insurance_number = models.CharField(db_column='InsuranceNumber', max_length=12, blank=True, null=True)  # CHF_ID
 
     policy_stage = models.CharField(db_column='PolicyStage', max_length=1, blank=True, null=True)
     amount = models.DecimalField(db_column='Amount', max_digits=18, decimal_places=2, blank=True, null=True)
