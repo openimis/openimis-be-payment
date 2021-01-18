@@ -70,6 +70,10 @@ class Payment(core_models.VersionedModel):
         managed = False
         db_table = 'tblPayment'
 
+    def __str__(self):
+        return f"id:{self.id}, expected_amount: {self.expected_amount}, status:{self.status}, " \
+               f"type:{self.type_of_payment}, uuid:{self.uuid}"
+
 
 class PaymentDetail(core_models.VersionedModel):
     id = models.BigAutoField(db_column='PaymentDetailsID', primary_key=True)
@@ -99,3 +103,7 @@ class PaymentDetail(core_models.VersionedModel):
     class Meta:
         managed = False
         db_table = 'tblPaymentDetails'
+
+    def __str__(self):
+        return f"id:{self.id}, payment:{self.payment_id}, ins_nb:{self.insurance_number}, amount:{self.amount}, " \
+               f"premium:{self.premium_id}"

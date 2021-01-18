@@ -60,5 +60,11 @@ def on_policy_mutation(sender, **kwargs):
     return errors
 
 
+class Mutation(graphene.ObjectType):
+    create_payment = CreatePaymentMutation.Field()
+    update_payment = UpdatePaymentMutation.Field()
+    delete_payment = DeletePaymentsMutation.Field()
+
+
 def bind_signals():
     signal_mutation_module_before_mutating["policy"].connect(on_policy_mutation)
