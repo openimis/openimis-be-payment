@@ -97,8 +97,8 @@ class PaymentDetail(core_models.VersionedModel):
                                           null=True)
 
     # rowid = models.TextField(db_column='RowID', blank=True, null=True)  # Field name made lowercase. This field type is a guess.
-    # auditED, not audit ???
-    # auditeduserid = models.IntegerField(db_column='AuditedUserId', blank=True, null=True)
+    # ! auditED in field name
+    audit_user_id = models.IntegerField(db_column='AuditedUserId', blank=True, null=True)
 
     class Meta:
         managed = False

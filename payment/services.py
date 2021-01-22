@@ -1,7 +1,12 @@
 import logging
 from gettext import gettext as _
 
-from payment.models import Payment
+from django.db import connection, transaction
+from django.db.models import OuterRef, Sum, Exists
+from insuree.models import Insuree
+from payment.models import Payment, PaymentDetail
+from policy.models import Policy
+from product.models import Product
 
 logger = logging.getLogger(__file__)
 
@@ -78,3 +83,16 @@ def update_or_create_payment(data, user):
     return payment
 
 
+def legacy_match_payment(payment_id=None, audit_user_id=-1):
+    with connection.cursor() as cur:
+        sql = """
+            DECLARE @ret int;
+            EXEC @ret = [dbo].[uspMatchPayment] @PaymentID = %s, @AuditUserId = %s;
+            SELECT @ret;
+        """
+        cur.execute(sql, (payment_id, audit_user_id,))
+
+        if cur.description is None:  # 0 is considered as 'no result' by pyodbc
+            return None
+        res = cur.fetchone()[0]  # FETCH 'SELECT @ret' returned value
+        raise Exception(res)
