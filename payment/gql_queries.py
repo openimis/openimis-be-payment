@@ -1,6 +1,6 @@
 import graphene
 from graphene_django import DjangoObjectType
-from .models import Payment, PaymentDetail
+from .models import Payment, PaymentDetail, PaymentMutation
 from core import prefix_filterset, filter_validity, ExtendedConnection
 
 
@@ -51,3 +51,8 @@ class PaymentDetailGQLType(DjangoObjectType):
             **prefix_filterset("payment__", PaymentGQLType._meta.filter_fields)
         }
         connection_class = ExtendedConnection
+
+
+class PaymentMutationGQLType(DjangoObjectType):
+    class Meta:
+        model = PaymentMutation

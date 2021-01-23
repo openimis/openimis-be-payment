@@ -2,12 +2,12 @@ from django.db.models import Q
 from django.core.exceptions import PermissionDenied
 from graphene_django.filter import DjangoFilterConnectionField
 import graphene_django_optimizer as gql_optimizer
+from payment.services import detach_payment_detail
 
 from .apps import PaymentConfig
 from django.utils.translation import gettext as _
 from core.schema import signal_mutation_module_before_mutating, OrderedDjangoFilterConnectionField
 from contribution import models as contribution_models
-from policy import models as policy_models
 from .models import Payment, PaymentDetail
 # We do need all queries and mutations in the namespace here.
 from .gql_queries import *  # lgtm [py/polluting-import]
@@ -17,6 +17,7 @@ from .gql_mutations import *  # lgtm [py/polluting-import]
 class Query(graphene.ObjectType):
     payments = OrderedDjangoFilterConnectionField(
         PaymentGQLType,
+        client_mutation_id=graphene.String(),
         orderBy=graphene.List(of_type=graphene.String),
     )
     payment_details = OrderedDjangoFilterConnectionField(
@@ -32,7 +33,11 @@ class Query(graphene.ObjectType):
     def resolve_payments(self, info, **kwargs):
         if not info.context.user.has_perms(PaymentConfig.gql_query_payments_perms):
             raise PermissionDenied(_("unauthorized"))
-        pass
+        filters = []
+        client_mutation_id = kwargs.get("client_mutation_id", None)
+        if client_mutation_id:
+            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+        return gql_optimizer.query(Payment.objects.filter(*filters).all(), info)
 
     def resolve_payment_details(self, info, **kwargs):
         if not info.context.user.has_perms(PaymentConfig.gql_query_payments_perms):
@@ -48,18 +53,6 @@ class Query(graphene.ObjectType):
         return Payment.objects.filter(Q(id__in=detail_ids))
 
 
-def on_policy_mutation(sender, **kwargs):
-    errors = []
-    if kwargs.get("mutation_class") == 'DeletePoliciesMutation':
-        uuids = kwargs['data'].get('uuids', [])
-        policies = policy_models.Policy.objects.prefetch_related("premiums__payment_details").filter(uuid__in=uuids).all()
-        for policy in policies:
-            for premium in policy.premiums.all():
-                for payment_detail in premium.payment_details.all():
-                    errors += detach_payment_detail(payment_detail)
-    return errors
-
-
 class Mutation(graphene.ObjectType):
     create_payment = CreatePaymentMutation.Field()
     update_payment = UpdatePaymentMutation.Field()
@@ -68,3 +61,4 @@ class Mutation(graphene.ObjectType):
 
 def bind_signals():
     signal_mutation_module_before_mutating["policy"].connect(on_policy_mutation)
+    signal_mutation_module_before_mutating["payment"].connect(on_payment_mutation)

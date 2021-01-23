@@ -107,3 +107,12 @@ class PaymentDetail(core_models.VersionedModel):
     def __str__(self):
         return f"id:{self.id}, payment:{self.payment_id}, ins_nb:{self.insurance_number}, amount:{self.amount}, " \
                f"premium:{self.premium_id}"
+
+
+class PaymentMutation(core_models.UUIDModel, core_models.ObjectMutation):
+    payment = models.ForeignKey(Payment, models.DO_NOTHING, related_name='mutations')
+    mutation = models.ForeignKey(core_models.MutationLog, models.DO_NOTHING, related_name='payments')
+
+    class Meta:
+        managed = True
+        db_table = "contribution_PaymentMutation"

@@ -1,7 +1,9 @@
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError, PermissionDenied
 from payment.apps import PaymentConfig
-from payment.models import Payment
+from payment.models import Payment, PaymentMutation
+from policy import models as policy_models
+from payment.services import update_or_create_payment, detach_payment_detail, set_payment_deleted
 from typing import Optional
 
 import graphene
@@ -49,7 +51,9 @@ class CreatePaymentMutation(OpenIMISMutation):
                     _("mutation.authentication_required"))
             if not user.has_perms(PaymentConfig.gql_mutation_create_payments_perms):
                 raise PermissionDenied(_("unauthorized"))
-            update_or_create_payment(data, user)
+            client_mutation_id = data.get("client_mutation_id")
+            payment = update_or_create_payment(data, user)
+            PaymentMutation.object_mutated(user, client_mutation_id=client_mutation_id, payment=payment)
             return None
         except Exception as exc:
             return [{
@@ -116,3 +120,28 @@ class DeletePaymentsMutation(OpenIMISMutation):
         if len(errors) == 1:
             errors = errors[0]['list']
         return errors
+
+
+def on_policy_mutation(sender, **kwargs):
+    errors = []
+    if kwargs.get("mutation_class") == 'DeletePoliciesMutation':
+        uuids = kwargs['data'].get('uuids', [])
+        policies = policy_models.Policy.objects.prefetch_related("premiums__payment_details").filter(uuid__in=uuids).all()
+        for policy in policies:
+            for premium in policy.premiums.all():
+                for payment_detail in premium.payment_details.all():
+                    errors += detach_payment_detail(payment_detail)
+    return errors
+
+
+def on_payment_mutation(sender, **kwargs):
+    uuids = kwargs['data'].get('uuids', [])
+    if not uuids:
+        uuid = kwargs['data'].get('uuid', None)
+        uuids = [uuid] if uuid else []
+    if not uuids:
+        return []
+    impacted_payments = Payment.objects.filter(uuid__in=uuids).all()
+    for payment in impacted_payments:
+        PaymentMutation.objects.create_or_update(payment=payment, mutation_id=kwargs['mutation_log_id'])
+    return []
