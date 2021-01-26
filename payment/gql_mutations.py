@@ -20,7 +20,7 @@ class PaymentBase:
     phone_number = graphene.String(required=False)
     request_date = graphene.Date(required=False)
     received_date = graphene.Date(required=False)
-    status = graphene.String(required=False)
+    status = graphene.Int(required=False)
     transaction_no = graphene.String(required=False)
     origin = graphene.String(required=False)
     matched_date = graphene.Date(required=False)

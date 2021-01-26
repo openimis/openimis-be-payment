@@ -1,7 +1,7 @@
 import graphene
 from graphene_django import DjangoObjectType
 from .models import Payment, PaymentDetail, PaymentMutation
-from core import prefix_filterset, filter_validity, ExtendedConnection
+from core import prefix_filterset, ExtendedConnection
 
 
 from contribution.schema import PremiumGQLType
@@ -9,7 +9,7 @@ from contribution.schema import PremiumGQLType
 
 class PaymentGQLType(DjangoObjectType):
     client_mutation_id = graphene.String()
-    
+
     class Meta:
         model = Payment
         interfaces = (graphene.relay.Node,)

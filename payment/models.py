@@ -7,17 +7,6 @@ from contribution.models import Premium, PayTypeChoices
 from django.utils.translation import gettext_lazy as _
 
 
-class PaymentStatusChoices(models.IntegerChoices):
-    STATUS_REJECTEDPOSTED_3 = -3, _("STATUS_REJECTEDPOSTED_3")
-    STATUS_REJECTEDPOSTED_2 = -2, _("STATUS_REJECTEDPOSTED_2")
-    STATUS_REJECTEDPOSTED_1 = -1, _("STATUS_REJECTEDPOSTED_1")
-    STATUS_NOTYETCONFIRMED = 1, _("STATUS_NOTYETCONFIRMED")
-    STATUS_POSTED = 2, _("STATUS_POSTED")
-    STATUS_ASSIGNED = 3, _("STATUS_ASSIGNED")
-    STATUS_UNMATCHED = 4, _("STATUS_UNMATCHED")
-    STATUS_PAYMENTMATCHED = 5, _("STATUS_PAYMENTMATCHED")
-
-
 class Payment(core_models.VersionedModel):
     STATUS_REJECTEDPOSTED_3 = -3
     STATUS_REJECTEDPOSTED_2 = -2
@@ -27,7 +16,7 @@ class Payment(core_models.VersionedModel):
     STATUS_ASSIGNED = 3
     STATUS_UNMATCHED = 4
     STATUS_PAYMENTMATCHED = 5
-    STATUS_CHOICES=(
+    STATUS_CHOICES = (
         (STATUS_REJECTEDPOSTED_3, _("REJECTEDPOSTED_3")),
         (STATUS_REJECTEDPOSTED_2, _("REJECTEDPOSTED_2")),
         (STATUS_REJECTEDPOSTED_1, _("REJECTEDPOSTED_1")),
@@ -49,7 +38,7 @@ class Payment(core_models.VersionedModel):
     phone_number = models.CharField(db_column='PhoneNumber', max_length=12, blank=True, null=True)
     request_date = fields.DateField(db_column='RequestDate', blank=True, null=True)
     received_date = fields.DateField(db_column='ReceivedDate', blank=True, null=True)
-    status = models.IntegerField(db_column='PaymentStatus', blank=True, null=True, choices=PaymentStatusChoices.choices)
+    status = models.IntegerField(db_column='PaymentStatus', blank=True, null=True)
 
     transaction_no = models.CharField(db_column='TransactionNo', max_length=50, blank=True, null=True)
     origin = models.CharField(db_column='PaymentOrigin', max_length=50, blank=True, null=True)
@@ -59,7 +48,7 @@ class Payment(core_models.VersionedModel):
     rejected_reason = models.CharField(db_column='RejectedReason', max_length=255, blank=True, null=True)
     date_last_sms = fields.DateField(db_column='DateLastSMS', blank=True, null=True)
     language_name = models.CharField(db_column='LanguageName', max_length=10, blank=True, null=True)
-    type_of_payment = models.CharField(db_column='TypeOfPayment', max_length=50, blank=True, null=True, choices=PayTypeChoices.choices)
+    type_of_payment = models.CharField(db_column='TypeOfPayment', max_length=50, blank=True, null=True)
     transfer_fee = models.DecimalField(db_column='TransferFee', max_digits=18, decimal_places=2, blank=True, null=True)
 
     # rowid = models.TextField(db_column='RowID')
