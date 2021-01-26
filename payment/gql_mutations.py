@@ -143,5 +143,5 @@ def on_payment_mutation(sender, **kwargs):
         return []
     impacted_payments = Payment.objects.filter(uuid__in=uuids).all()
     for payment in impacted_payments:
-        PaymentMutation.objects.create_or_update(payment=payment, mutation_id=kwargs['mutation_log_id'])
+        PaymentMutation.objects.get_or_create(payment=payment, mutation_id=kwargs['mutation_log_id'])
     return []
