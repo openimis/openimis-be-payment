@@ -115,4 +115,4 @@ class PaymentMutation(core_models.UUIDModel, core_models.ObjectMutation):
 
     class Meta:
         managed = True
-        db_table = "contribution_PaymentMutation"
+        db_table = "payment_PaymentMutation"

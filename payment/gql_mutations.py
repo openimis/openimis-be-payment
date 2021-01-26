@@ -35,9 +35,9 @@ class PaymentBase:
 
 class CreatePaymentMutation(OpenIMISMutation):
     """
-    Create a contribution for policy with or without a payer
+    Create a payment for policy with or without a payer
     """
-    _mutation_module = "contribution"
+    _mutation_module = "payment"
     _mutation_class = "CreatePaymentMutation"
 
     class Input(PaymentBase, OpenIMISMutation.Input):
@@ -57,16 +57,16 @@ class CreatePaymentMutation(OpenIMISMutation):
             return None
         except Exception as exc:
             return [{
-                'message': _("contribution.mutation.failed_to_create_premium"),
+                'message': _("payment.mutation.failed_to_create_payment"),
                 'detail': str(exc)}
             ]
 
 
 class UpdatePaymentMutation(OpenIMISMutation):
     """
-    Update a contribution for policy with or without a payer
+    Update a payment for policy
     """
-    _mutation_module = "contribution"
+    _mutation_module = "payment"
     _mutation_class = "UpdatePaymentMutation"
 
     class Input(PaymentBase, OpenIMISMutation.Input):
@@ -94,7 +94,7 @@ class DeletePaymentsMutation(OpenIMISMutation):
     """
     Delete one or several Payments.
     """
-    _mutation_module = "contribution"
+    _mutation_module = "payment"
     _mutation_class = "DeletePaymentsMutation"
 
     class Input(OpenIMISMutation.Input):
@@ -113,7 +113,7 @@ class DeletePaymentsMutation(OpenIMISMutation):
                 errors.append({
                     'title': payment_uuid,
                     'list': [{'message': _(
-                        "contribution.validation.id_does_not_exist") % {'id': payment_uuid}}]
+                        "payment.validation.id_does_not_exist") % {'id': payment_uuid}}]
                 })
                 continue
             errors += set_payment_deleted(payment)

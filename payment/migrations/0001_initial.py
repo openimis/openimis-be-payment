@@ -76,7 +76,7 @@ class Migration(migrations.Migration):
                 ('payment', models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, related_name='mutations', to='payment.Payment')),
             ],
             options={
-                'db_table': 'contribution_PaymentMutation',
+                'db_table': 'payment_PaymentMutation',
                 'managed': True,
             },
             bases=(models.Model, core.models.ObjectMutation),
