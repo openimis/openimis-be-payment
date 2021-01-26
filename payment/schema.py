@@ -6,7 +6,7 @@ from payment.services import detach_payment_detail
 
 from .apps import PaymentConfig
 from django.utils.translation import gettext as _
-from core.schema import signal_mutation_module_before_mutating, OrderedDjangoFilterConnectionField
+from core.schema import signal_mutation_module_before_mutating, OrderedDjangoFilterConnectionField, filter_validity
 from contribution import models as contribution_models
 from .models import Payment, PaymentDetail
 # We do need all queries and mutations in the namespace here.
@@ -37,6 +37,9 @@ class Query(graphene.ObjectType):
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:
             filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+        show_history = kwargs.get('show_history', False)
+        if not show_history and not kwargs.get('uuid', None):
+            filters += filter_validity(**kwargs)
         return gql_optimizer.query(Payment.objects.filter(*filters).all(), info)
 
     def resolve_payment_details(self, info, **kwargs):
