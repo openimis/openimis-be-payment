@@ -3,12 +3,13 @@ from django.core.exceptions import ValidationError, PermissionDenied
 from payment.apps import PaymentConfig
 from payment.models import Payment, PaymentMutation
 from policy import models as policy_models
-from payment.services import update_or_create_payment, detach_payment_detail, set_payment_deleted
+from payment.services import update_or_create_payment, detach_payment_detail, set_payment_deleted, \
+    update_or_create_payment_detail
 from typing import Optional
 
 import graphene
-from core.schema import OpenIMISMutation, logger
-from django.utils.translation import gettext as _
+from core.schema import OpenIMISMutation
+from django.utils.translation import gettext_lazy, gettext as _
 
 
 class PaymentBase:
@@ -31,6 +32,8 @@ class PaymentBase:
     language_name = graphene.String(required=False)
     type_of_payment = graphene.String(required=False)
     transfer_fee = graphene.Decimal(max_digits=18, decimal_places=2, required=False)
+    premium_uuid = graphene.String(
+        required=False, description=gettext_lazy("payment.gql.payment_base.premium_uuid"))
 
 
 class CreatePaymentMutation(OpenIMISMutation):
@@ -51,8 +54,11 @@ class CreatePaymentMutation(OpenIMISMutation):
                     _("mutation.authentication_required"))
             if not user.has_perms(PaymentConfig.gql_mutation_create_payments_perms):
                 raise PermissionDenied(_("unauthorized"))
+            premium_uuid = data.pop("premium_uuid") if "premium_uuid" in data else None
             client_mutation_id = data.get("client_mutation_id")
             payment = update_or_create_payment(data, user)
+            if premium_uuid:
+                update_or_create_payment_detail(payment, premium_uuid, user)
             PaymentMutation.object_mutated(user, client_mutation_id=client_mutation_id, payment=payment)
             return None
         except Exception as exc:
@@ -80,7 +86,10 @@ class UpdatePaymentMutation(OpenIMISMutation):
                     _("mutation.authentication_required"))
             if not user.has_perms(PaymentConfig.gql_mutation_update_payments_perms):
                 raise PermissionDenied(_("unauthorized"))
-            update_or_create_payment(data, user)
+            premium_uuid = data.pop("premium_uuid") if "premium_uuid" in data else None
+            payment = update_or_create_payment(data, user)
+            if premium_uuid:
+                update_or_create_payment_detail(payment, premium_uuid, user)
             return None
         except Exception as exc:
             return [{
