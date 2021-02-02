@@ -14,6 +14,8 @@ logger = logging.getLogger(__file__)
 
 def set_payment_deleted(payment):
     try:
+        for pd in payment.payment_details.filter(validity_to__isnull=True):
+            pd.delete_history()
         payment.delete_history()
         return []
     except Exception as exc:
