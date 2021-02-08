@@ -1,12 +1,18 @@
 import logging
 from gettext import gettext as _
 
-from contribution.models import Premium
-from django.db import connection, transaction
-from django.db.models import OuterRef, Sum, Exists
+from contribution.models import Premium, PayTypeChoices
+from core.models import Officer
+from django.db import connection
+from django.db.models import OuterRef, Sum, Q, Max
 from insuree.models import Insuree
+from location.apps import LocationConfig
+from payment.apps import PaymentConfig
 from payment.models import Payment, PaymentDetail
+from policy.apps import PolicyConfig
 from policy.models import Policy
+from policy.services import update_insuree_policies
+from policy.values import policy_values, set_start_date, set_expiry_date
 from product.models import Product
 
 logger = logging.getLogger(__file__)
@@ -130,138 +136,281 @@ def legacy_match_payment(payment_id=None, audit_user_id=-1):
         if cur.description is None:  # 0 is considered as 'no result' by pyodbc
             res = None
         else:
-            res = cur.fetchone()[0]  # FETCH 'SELECT @ret' returned value
+            info = cur.fetchall()  # FETCH 'SELECT @ret' returned value
+            logger.info("matchPayment result: %s", info)
         if cur.nextset() and cur.description:
-            additional_response = cur.fetchall()
-            logger.debug("Additional response from uspMatchPayment: %s", additional_response)
+            res = cur.fetchone()[0]
         if res:
             raise Exception(res)
 
 
-def match_payment_no_raw(payment_id=None, audit_user_id=-1):
-    if payment_id:
+def match_payment(payment_id=None, payment=None, audit_user_id=None):
+    if payment is None:
         payment = Payment.filter_queryset().get(id=payment_id)
 
-    # TODO: not sure about the OuterRef here, we are checking what is already paid by what exactly ?
-    # The existing code (recently updated) sums the entire table
-    already_paid = PaymentDetail.filter_queryset().filter(payment__matched_date__isnull=False)\
-        .filter(payment_id=OuterRef("payment_id"))\
-        .values(already_paid=Sum("amount"))
-    valid_insuree = Insuree.filter_queryset()\
-        .filter(chf_id=OuterRef("insurance_number"))
-    valid_product = Product.filter_queryset()\
-        .filter(code=OuterRef("product_code"))
-    policy = Policy.filter_queryset().exclude(status__in=[Policy.STATUS_SUSPENDED, Policy.STATUS_EXPIRED])\
-        .filter(product__code=OuterRef("product_code"))\
-        .filter(family__members__chf_id=OuterRef("insurance_number"))
+    payment_details = payment.payment_details.filter(validity_to__isnull=True)
 
-    pd_queryset = PaymentDetail.filter_queryset().filter(premium_id__isnull=True)\
-        .filter(payment__status=Payment.STATUS_UNMATCHED)\
-        .filter(payment__status=Payment.STATUS_UNMATCHED)\
-        .annotate(already_paid=already_paid)\
-        .annotate(valid_insuree=Exists(valid_insuree))\
-        .annotate(valid_product=Exists(valid_product))\
-        .annotate(policy_id=policy.values("id"))
-
-    if payment_id:
-        pd_queryset = pd_queryset.filter(payment_id=payment_id)
-
-    nb_missing_insurance_number = 0
-    nb_missing_product_code = 0
-    nb_missing_insuree = 0
-    nb_missing_product = 0
-    for pd in pd_queryset:
-        # Validate and fetch insuree/policy/product/...
-        if not pd.insurance_number:
-            nb_missing_insurance_number += 1
+    valid_pd = []
+    # validation
+    for pd in payment_details:
+        errors = validate_payment_detail(pd)
+        if len(errors) > 0:
             continue
+        valid_pd.append(pd)
 
-        if not pd.product_code:
-            nb_missing_product_code += 1
+        assign_payment_detail(pd, audit_user_id)
+
+    # Only update the policy status for self payer renew (stage R, no officer)
+    # contribution without payment (Stage N status READY with officer)
+    # PolicyID and phone number required in both cases
+    should_update_policy = any((
+                (pd.policy_stage == Policy.STAGE_RENEWED and pd.payment.officer_code is None)
+                or (pd.policy.status == Policy.STATUS_READY
+                    and pd.policy_stage == Policy.STAGE_NEW
+                    and pd.payment.officer_code is not None)
+                and pd.payment.phone_number is not None
+                and pd.policy is not None)
+            for pd in valid_pd)
+
+    if should_update_policy:
+        processed = {}
+        for pd in valid_pd:
+            # recompute policy value for renewal
+            new_policy, warnings = policy_values(pd.policy, pd.insuree.family, pd.policy)
+            if len(warnings) > 0:
+                logger.warning("Warning computing the new policy value %s", warnings)
+            transaction_no = pd.payment.transaction_no if pd.payment.transaction_no else None
+
+            if (
+                    (pd.policy.status == Policy.STATUS_IDLE and pd.policy.stage == Policy.STAGE_RENEWED)
+                    and (pd.policy.status == Policy.STATUS_READY
+                         and PolicyConfig.activation_option == PolicyConfig.ACTIVATION_OPTION_READY
+                         and pd.policy_stage == Policy.STAGE_NEW)
+                    and pd.policy.id not in processed):
+                if pd.premium.amount >= pd.policy.value:
+                    new_policy.save_history()
+                    new_policy.status = Policy.STATUS_ACTIVE
+                    new_policy.effective_date = pd.policy.start_date
+                    set_expiry_date(new_policy)
+                    from core import datetime
+                    new_policy.validity_from = datetime.datetime.now()
+                    new_policy.audit_user_id = audit_user_id
+                    new_policy.save()
+
+                    for ip in new_policy.insuree_policies.filter(validity_to__isnull=True):
+                        ip.save_history()
+                        ip.effective_date = pd.policy.start_date
+                        ip.validity_from = datetime.datetime.now()
+                        ip.audit_user_id = audit_user_id
+                        ip.save()
+
+                    processed[pd.policy.id] = True
+            else:
+                if pd.policy.status not in [Policy.STATUS_IDLE, Policy.STATUS_READY] and pd.policy.id not in processed:
+                    # insert new renewals if the policy is not IDLE
+                    set_expiry_date(pd.policy)
+                    if pd.amount >= pd.policy.value:
+                        pd.policy.status = Policy.STATUS_ACTIVE
+                        set_start_date(pd.policy)
+                    else:
+                        pd.policy.status = Policy.STATUS_IDLE
+
+                    pd.policy.save_history()
+                    pd.policy.save()
+
+                    for insuree in pd.insuree.family.members.filter(validity_to__isnull=True):
+                        update_insuree_policies(pd.policy, audit_user_id)
+                    processed[pd.policy.id] = True
+                else:
+                    # increment matched payment ?
+                    pass
+
+            # insert premiums for individual renewals only
+            if pd.premium is None:
+                premium, premium_created = Premium.objects.filter(validity_to__isnull=True).update_or_create(
+                    policy=pd.policy,
+                    amount=pd.amount,
+                    type=PayTypeChoices.CASH.value,
+                    transaction_no=transaction_no,
+                    defaults=dict(
+                        audit_user_id=audit_user_id,
+                        pay_date=datetime.datetime.now(),
+                        validity_from=datetime.datetime.now(),
+                    ),
+                )
+                pd.premium = premium
+                pd.save()
+
+
+def assign_payment_detail(pd, audit_user_id):
+    # List premiums with the already paid amounts for each
+    payment_details_subquery = PaymentDetail.filter_queryset()\
+        .filter(premium_id=OuterRef("id")).values(amount_sum=Sum("amount"))
+    premiums = Premium.filter_queryset().filter(policy=pd.policy).annotate(total_paid=payment_details_subquery)
+
+    logger.debug("Assigning payment_detail %s with amount %s in policy %s", pd.id, pd.amount, pd.policy)
+    available = 0
+    for premium in premiums:
+        # if the payments (including carried excess) equals or exceeds this premium, skip it and adjust available
+        total_paid = premium.total_paid if premium.total_paid else 0
+        if available + total_paid >= premium.amount:
+            available += total_paid - premium.amount
+            logger.debug("payment_detail %s, premium %s is already fulfilled (paid: %s, needed: %s, carrying over: %s)",
+                         pd.id, premium.id, total_paid, premium.amount, available)
             continue
+        # we'll assign payment to this premium
+        logger.debug("Assigning payment_detail %s to premium %s", pd.id, premium.id)
+        if pd.amount + available + total_paid >= premium.amount:
+            logger.debug("Payment_detail %s is enough to cover the premium", pd.id)
+        else:
+            logger.debug("Payment_detail %s is NOT enough to cover the premium: %s+%s+%s/%s",
+                         pd.id, pd.amount, available, total_paid, premium.amount)
+        pd.premium = premium
+        from core import datetime
+        pd.validity_from = datetime.datetime.now()
+        # pd.amount = premium.amount
+        pd.audit_user_id = audit_user_id
+        pd.save()
 
-        if not pd.valid_insuree:
-            nb_missing_insuree += 1
-            continue
-
-        if not pd.valid_product:
-            nb_missing_product += 1
-            continue
-
-TBLDETAIL_DEF = f"""
-CREATE TABLE #tblDetail
-(
-   PaymentDetailsID  BIGINT,
-   PaymentID         BIGINT,
-   InsuranceNumber   nvarchar(12),
-   ProductCode       nvarchar(8),
-   EnrollDate    DATE,
-   PolicyStage       CHAR(1),
-   MatchedDate       DATE, --
-   PolicyValue       DECIMAL(18, 2),
-   DistributedValue  DECIMAL(18, 2), --
-   policyID          INT,
-   RenewalPolicyID   INT, -- unused ?
-   PremiumID         INT,
-   PolicyStatus      INT,
-   AlreadyPaidDValue DECIMAL(18, 2)
-)
-"""
+        pd.payment.status = Payment.STATUS_PAYMENTMATCHED
+        pd.payment.matched_date = datetime.datetime.now()
+        pd.payment.audit_user_id = audit_user_id
+        pd.payment.validity_from = datetime.datetime.now()
+        pd.payment.save()
 
 
-TBLDETAIL_QUERY = f"""
-SELECT PD.PaymentDetailsID,
-        PY.PaymentID,
-        PD.InsuranceNumber,
-        PD.ProductCode,
-        PL.EnrollDate,
-        PD.PolicyStage,
-        null as MatchedDate,
-        PL.PolicyValue,
-        null as Distributedvalue,
-        PL.PolicyID,
-        null as RenewalPolicyID,
-        PRM.PremiumId,
-        PL.PolicyStatus,
-        (SELECT SUM(PDD.Amount)
-         FROM tblPaymentDetails PDD
-                  INNER JOIN tblPayment PYY ON PDD.PaymentID = PYY.PaymentID
-         WHERE PYY.MatchedDate IS NOT NULL
-           and PDD.ValidityTo is NULL)     AlreadyPaidDValue
- INTO #tblDetail
- FROM tblPaymentDetails PD
-          LEFT OUTER JOIN tblInsuree I ON I.CHFID = PD.InsuranceNumber
-          LEFT OUTER JOIN tblFamilies F ON F.FamilyID = I.FamilyID
-          LEFT OUTER JOIN tblProduct PR ON PR.ProductCode = PD.ProductCode
-          LEFT OUTER JOIN (SELECT PolicyID, EnrollDate, PolicyValue, FamilyID, ProdID, PolicyStatus
-                           FROM tblPolicy
-                           WHERE ValidityTo IS NULL
-                             AND PolicyStatus NOT IN ({Policy.STATUS_SUSPENDED}, {Policy.STATUS_EXPIRED})) PL
-                          ON PL.ProdID = PR.ProdID AND PL.FamilyID = I.FamilyID
-          LEFT OUTER JOIN (SELECT MAX(PremiumId) PremiumId, PolicyID
-                           FROM tblPremium
-                           WHERE ValidityTo IS NULL
-                           GROUP BY PolicyID) PRM ON PRM.PolicyID = PL.PolicyID
-          INNER JOIN tblPayment PY ON PY.PaymentID = PD.PaymentID
- WHERE PD.PremiumID IS NULL
-   AND PD.ValidityTo IS NULL
-   AND I.ValidityTo IS NULL
-   AND PR.ValidityTo IS NULL
-   AND F.ValidityTo IS NULL
-   AND PY.ValidityTo IS NULL
-   AND PY.PaymentStatus = {Payment.STATUS_UNMATCHED}
-   AND PD.PaymentID = ISNULL(%s, PD.PaymentID)
-"""
+PAYMENT_DETAIL_REJECTION_INSURANCE_NB = 101
+PAYMENT_DETAIL_REJECTION_PRODUCT_CODE = 102
+PAYMENT_DETAIL_REJECTION_INSURANCE_NB_INVALID = 103
+PAYMENT_DETAIL_REJECTION_POLICY_NOT_FOUND = 104
+PAYMENT_DETAIL_REJECTION_PRODUCT_CODE_INVALID = 105
+PAYMENT_DETAIL_REJECTION_PRODUCT_NOT_ALLOWED = 106
+PAYMENT_DETAIL_REJECTION_OFFICER_NOT_FOUND = 107
+PAYMENT_DETAIL_REJECTION_PRODUCT_LOCATION = 108
+PAYMENT_DETAIL_REJECTION_NO_PREMIUM = 109
 
-@transaction.atomic
-def match_payment(payment_id=None, audit_user_id=-1):
-    if payment_id:
-        payment = Payment.filter_queryset().get(id=payment_id)
 
-    with connection.cursor() as cur:
-        cur.execute(TBLDETAIL_DEF)
-        cur.execute(TBLDETAIL_QUERY, (payment_id,))
-        cur.execute("select * from #tblDetail;")
-        foo=cur.fetchall()
+def validate_payment_detail(pd):
+    if PaymentConfig.default_validations_disabled:
+        return []
 
+    errors = []
+    if pd.insurance_number is None:
+        errors += [{'code': PAYMENT_DETAIL_REJECTION_INSURANCE_NB,
+                    'message': _("payment.validation.detail.reject.insurance_nb") % {
+                        'id': pd.id
+                    },
+                    'detail': pd.id}]
+
+    if pd.product_code is None:
+        errors += [{'code': PAYMENT_DETAIL_REJECTION_PRODUCT_CODE,
+                    'message': _("payment.validation.detail.reject.product_code") % {
+                        'id': pd.id
+                    },
+                    'detail': pd.id}]
+
+    if len(errors) > 0:
+        return errors
+
+    insuree = Insuree.filter_queryset().filter(chf_id=pd.insurance_number) \
+        .first()
+    if not insuree:
+        errors += [{'code': PAYMENT_DETAIL_REJECTION_INSURANCE_NB_INVALID,
+                    'message': _("payment.validation.detail.reject.insurance_nb_invalid") % {
+                        'id': pd.id,
+                        'chf': pd.insurance_number
+                    },
+                    'detail': pd.id}]
+        return errors
+
+    policy = Policy.filter_queryset()\
+        .filter(product__validity_to__isnull=True, product__code=pd.product_code)\
+        .filter(family__validity_to__isnull=True)\
+        .filter(family__members__validity_to__isnull=True, family__members__chf_id=pd.insurance_number)\
+        .first()
+
+    if not policy:
+        errors += [{'code': PAYMENT_DETAIL_REJECTION_POLICY_NOT_FOUND,
+                    'message': _("payment.validation.detail.reject.policy_not_found") % {
+                        'id': pd.id,
+                        'chf': pd.insurance_number,
+                        'product_code': pd.product_code,
+                    },
+                    'detail': pd.id}]
+        return errors
+
+    location_cursor = insuree.family.location
+    family_location_ids = []
+    if location_cursor:
+        for loc in LocationConfig.location_types:
+            family_location_ids.append(location_cursor.id)
+            location_cursor = location_cursor.parent
+            if location_cursor is None:
+                break
+
+    # Original code checked the product validity against current_date, I used the enroll_date instead
+    product = Product.filter_queryset().filter(
+        Q(location_id__isnull=True) | Q(location_id__in=family_location_ids),
+        date_from__lte=policy.enroll_date,
+        date_to__gte=policy.enroll_date,
+        code=pd.product_code,
+    ).first()
+    if not product:
+        errors += [{'code': PAYMENT_DETAIL_REJECTION_PRODUCT_NOT_ALLOWED,
+                    'message': _("payment.validation.detail.reject.product_not_allowed") % {
+                        'id': pd.id,
+                        'chf': pd.insurance_number,
+                        'product_code': pd.product_code,
+                    },
+                    'detail': pd.id}]
+        return errors
+
+    # Check enrollment officer
+    officer = Officer.filter_queryset().filter(
+        code=pd.payment.officer_code
+    ).first()
+    if not product:
+        errors += [{'code': PAYMENT_DETAIL_REJECTION_OFFICER_NOT_FOUND,
+                    'message': _("payment.validation.detail.reject.officer_not_found") % {
+                        'id': pd.id,
+                        'chf': pd.insurance_number,
+                        'officer_code': pd.payment.officer_code,
+                    },
+                    'detail': pd.id}]
+        return errors
+
+    # Check officer district vs product location
+    # TODO this checks district/region, should be more generic
+    if not (
+            officer.location is None
+            or product is None
+            or officer.location_id == product.location_id
+            or (officer.location.parent is not None and officer.location.parent == product.location.parent)):
+        errors += [{'code': PAYMENT_DETAIL_REJECTION_PRODUCT_LOCATION,
+                    'message': _("payment.validation.detail.reject.product_location") % {
+                        'id': pd.id,
+                        'chf': pd.insurance_number,
+                        'product_code': pd.product_code,
+                    },
+                    'detail': pd.id}]
+        return errors
+
+    # Check that there is a premium available for that policy
+    # TODO avoid relying on max(id) as using uuids would ruin it
+    latest_premium = policy.premiums.filter(validity_to__isnull=True).aggregate(Max("id"))
+    if not latest_premium:
+        errors += [{'code': PAYMENT_DETAIL_REJECTION_NO_PREMIUM,
+                    'message': _("payment.validation.detail.reject.no_premium") % {
+                        'id': pd.id,
+                        'policy': policy.uuid,
+                    },
+                    'detail': pd.id}]
+        return errors
+
+    # TODO instead of returning those, we should update the payment_detail with actual foreign keys
+    pd.policy = policy
+    pd.insuree = insuree
+    pd.latest_premium = latest_premium
+    pd.product = product
+    return errors
 

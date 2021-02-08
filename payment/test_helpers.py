@@ -33,6 +33,8 @@ def create_test_payment2(insuree_code=None, product_code=None, officer_code=None
             validity_to=None,
             product_code=product_code,
             insurance_number=insuree_code,
+            policy_stage='N',
+            amount="1000",
             **(detail_custom_props if detail_custom_props else {})
         )
     else:
