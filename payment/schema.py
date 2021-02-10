@@ -17,6 +17,7 @@ from .gql_mutations import *  # lgtm [py/polluting-import]
 class Query(graphene.ObjectType):
     payments = OrderedDjangoFilterConnectionField(
         PaymentGQLType,
+        show_history=graphene.Boolean(),
         client_mutation_id=graphene.String(),
         orderBy=graphene.List(of_type=graphene.String),
     )
