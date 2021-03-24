@@ -1,13 +1,15 @@
 import graphene
 from graphene_django import DjangoObjectType
-from .models import Payment, PaymentDetail
-from core import prefix_filterset, filter_validity, ExtendedConnection
+from .models import Payment, PaymentDetail, PaymentMutation
+from core import prefix_filterset, ExtendedConnection
 
 
 from contribution.schema import PremiumGQLType
 
 
 class PaymentGQLType(DjangoObjectType):
+    client_mutation_id = graphene.String()
+
     class Meta:
         model = Payment
         interfaces = (graphene.relay.Node,)
@@ -34,6 +36,11 @@ class PaymentGQLType(DjangoObjectType):
         }
         connection_class = ExtendedConnection
 
+    def resolve_client_mutation_id(self, info):
+        payment_mutation = self.mutations.select_related(
+            'mutation').filter(mutation__status=0).first()
+        return payment_mutation.mutation.client_mutation_id if payment_mutation else None
+
 
 class PaymentDetailGQLType(DjangoObjectType):
     class Meta:
@@ -51,3 +58,8 @@ class PaymentDetailGQLType(DjangoObjectType):
             **prefix_filterset("payment__", PaymentGQLType._meta.filter_fields)
         }
         connection_class = ExtendedConnection
+
+
+class PaymentMutationGQLType(DjangoObjectType):
+    class Meta:
+        model = PaymentMutation
