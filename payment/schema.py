@@ -12,6 +12,7 @@ from .models import Payment, PaymentDetail
 # We do need all queries and mutations in the namespace here.
 from .gql_queries import *  # lgtm [py/polluting-import]
 from .gql_mutations import *  # lgtm [py/polluting-import]
+from .signals import signal_before_payment_query, _read_signal_results
 
 
 class Query(graphene.ObjectType):
@@ -20,6 +21,8 @@ class Query(graphene.ObjectType):
         show_history=graphene.Boolean(),
         client_mutation_id=graphene.String(),
         orderBy=graphene.List(of_type=graphene.String),
+        # OFS-257: Create dynamic filters for the payment mutation
+        additional_filter=graphene.JSONString(),
     )
     payment_details = OrderedDjangoFilterConnectionField(
         PaymentDetailGQLType,
@@ -41,6 +44,15 @@ class Query(graphene.ObjectType):
         show_history = kwargs.get('show_history', False)
         if not show_history and not kwargs.get('uuid', None):
             filters += filter_validity(**kwargs)
+        # OFS-257: Create dynamic filters for the payment mutation
+        additional_filter = kwargs.get('additional_filter', None)
+        filters_from_signal = _get_additional_filter(
+            sender=self, additional_filter=additional_filter, user=info.context.user
+        )
+        if len(filters_from_signal) > 0:
+            filters.extend(filters_from_signal)
+            # distinct query result after filtering through payment details
+            return gql_optimizer.query(Payment.objects.filter(*filters).distinct().all(), info)
         return gql_optimizer.query(Payment.objects.filter(*filters).all(), info)
 
     def resolve_payment_details(self, info, **kwargs):
@@ -66,3 +78,15 @@ class Mutation(graphene.ObjectType):
 def bind_signals():
     signal_mutation_module_before_mutating["policy"].connect(on_policy_mutation)
     signal_mutation_module_before_mutating["payment"].connect(on_payment_mutation)
+
+
+def _get_additional_filter(sender, additional_filter, user):
+    # function to retrieve additional filters from signal
+    filters_from_signal = []
+    if additional_filter:
+        # send signal to append additional filter
+        results_signal = signal_before_payment_query.send(
+            sender=sender, additional_filter=additional_filter, user=user,
+        )
+        filters_from_signal = _read_signal_results(results_signal)
+    return filters_from_signal
