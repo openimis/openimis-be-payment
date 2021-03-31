@@ -51,7 +51,7 @@ class Query(graphene.ObjectType):
             signal_before_payment_query.send(
                 sender=self, additional_filter=additional_filter, filters=filters, user=info.context.user,
             )
-            # distinct query result after filtering via Policy Holder
+            # distinct query result after filtering through payment details
             return gql_optimizer.query(Payment.objects.filter(*filters).distinct().all(), info)
         return gql_optimizer.query(Payment.objects.filter(*filters).all(), info)
 
