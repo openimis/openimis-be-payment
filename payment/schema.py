@@ -47,7 +47,7 @@ class Query(graphene.ObjectType):
         # OFS-257: Create dynamic filters for the payment mutation
         additional_filter = kwargs.get('additional_filter', None)
         if additional_filter:
-            # send signal to append filter in case of putting policy holder
+            # send signal to append additional filter
             signal_before_payment_query.send(
                 sender=self, additional_filter=additional_filter, filters=filters, user=info.context.user,
             )
