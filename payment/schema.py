@@ -46,10 +46,13 @@ class Query(graphene.ObjectType):
             filters += filter_validity(**kwargs)
         # OFS-257: Create dynamic filters for the payment mutation
         additional_filter = kwargs.get('additional_filter', None)
-        filters_from_signal = _get_additional_filter(
-            sender=self, additional_filter=additional_filter, user=info.context.user
-        )
-        if len(filters_from_signal) > 0:
+        # go to process additional filter only when this arg of filter was passed into query
+        if additional_filter:
+            filters_from_signal = _get_additional_filter(
+                sender=self, additional_filter=additional_filter, user=info.context.user
+            )
+            if not info.context.user.has_perms(PaymentConfig.gql_query_payments_perms) or len(filters_from_signal) == 0:
+                raise PermissionDenied(_("unauthorized"))
             filters.extend(filters_from_signal)
             # distinct query result after filtering through payment details
             return gql_optimizer.query(Payment.objects.filter(*filters).distinct().all(), info)
