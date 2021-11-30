@@ -32,7 +32,9 @@ class PaymentGQLType(DjangoObjectType):
             "receipt_no": ["exact", "istartswith", "icontains", "iexact", "isnull"],
             "rejected_reason": ["exact", "istartswith", "icontains", "iexact", "isnull"],
             "language_name": ["exact", "istartswith", "icontains", "iexact", "isnull"],
-            "type_of_payment": ["exact", "istartswith", "icontains", "iexact", "isnull"]
+            "type_of_payment": ["exact", "istartswith", "icontains", "iexact", "isnull"],
+            "reconc_req_id": ["exact", "istartswith", "icontains", "iexact", "isnull"],
+            "reconciliation_date": ["exact", "lt", "lte", "gt", "gte", "isnull"]
         }
         connection_class = ExtendedConnection
 
