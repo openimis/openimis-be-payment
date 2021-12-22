@@ -30,8 +30,8 @@ jobs:
           python-version: 3.8
       - name: install linux packages
         run: |
-          wget https://raw.githubusercontent.com/openimis/database_ms_sqlserver/main/Empty%20databases/openIMIS_ONLINE.sql -O openIMIS_ONLINE.sql
-          wget https://raw.githubusercontent.com/openimis/database_ms_sqlserver/main/Demo%20database/openIMIS_demo_ONLINE.sql -O openIMIS_demo_ONLINE.sql
+          wget https://raw.githubusercontent.com/openimis/database_ms_sqlserver/develop/Empty%20databases/openIMIS_ONLINE.sql -O openIMIS_ONLINE.sql
+          wget https://raw.githubusercontent.com/openimis/database_ms_sqlserver/develop/Demo%20database/openIMIS_demo_ONLINE.sql -O openIMIS_demo_ONLINE.sql
           curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
           curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/msprod.list
           sudo apt-get update
@@ -44,7 +44,7 @@ jobs:
       - name: copy current branch
         uses: actions/checkout@v2
         with:
-          path: './current-module'
+          path: "./current-module"
       - name: Update the configuration
         working-directory: ./openimis
         run: |
@@ -73,9 +73,9 @@ jobs:
           SA_PASSWORD: GitHub999
           ACCEPT_EULA: Y
 
-#      - name: Check formatting with black
-#        run: |
-#          black --check .
+      #      - name: Check formatting with black
+      #        run: |
+      #          black --check .
 
       - name: Django tests
         working-directory: ./openimis/openIMIS
