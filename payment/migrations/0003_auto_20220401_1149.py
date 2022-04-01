@@ -3,7 +3,6 @@
 
 from django.db import migrations
 from django.forms import DateTimeField
-import models
 
 
 class Migration(migrations.Migration):
