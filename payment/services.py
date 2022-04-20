@@ -1,4 +1,5 @@
 import logging
+from django.db.models import Q
 from gettext import gettext as _
 
 from contribution.models import Premium, PayTypeChoices
@@ -323,7 +324,9 @@ def validate_payment_detail(pd):
                     'detail': pd.id}]
         return errors
 
+    from core import datetime
     policy = Policy.filter_queryset()\
+        .filter(Q(validity_to__isnull=True) | Q(validity_to__gt=datetime.datetime.now()))\
         .filter(product__validity_to__isnull=True, product__code=pd.product_code)\
         .filter(family__validity_to__isnull=True)\
         .filter(family__members__validity_to__isnull=True, family__members__chf_id=pd.insurance_number)\

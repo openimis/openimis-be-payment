@@ -1,6 +1,7 @@
+from django.test import TestCase
+
 from contribution.test_helpers import create_test_premium
 from core.test_helpers import create_test_officer
-from django.test import TestCase
 from insuree.test_helpers import create_test_insuree
 from location.models import Location
 from medical.test_helpers import create_test_service
