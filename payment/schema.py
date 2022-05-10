@@ -19,6 +19,7 @@ class Query(graphene.ObjectType):
     payments = OrderedDjangoFilterConnectionField(
         PaymentGQLType,
         show_history=graphene.Boolean(),
+        show_reconciled=graphene.Boolean(),
         client_mutation_id=graphene.String(),
         orderBy=graphene.List(of_type=graphene.String),
         # OFS-257: Create dynamic filters for the payment mutation
@@ -51,12 +52,18 @@ class Query(graphene.ObjectType):
             raise PermissionDenied(_("unauthorized"))
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:
-            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+            filters.append(
+                Q(mutations__mutation__client_mutation_id=client_mutation_id))
         show_history = kwargs.get('show_history', False)
         if not show_history and not kwargs.get('uuid', None):
             filters += filter_validity(**kwargs)
-        return gql_optimizer.query(Payment.objects.filter(*filters).distinct().all(), info)
+        show_reconciled = kwargs.get('show_reconciled', False)
+        if show_reconciled:
+            filters.append(
+                Q(reconciliation_date__isnull=False)
+            )
 
+        return gql_optimizer.query(Payment.objects.filter(*filters).distinct().all(), info)
 
     def resolve_payment_details(self, info, **kwargs):
         if not info.context.user.has_perms(PaymentConfig.gql_query_payments_perms):
@@ -66,7 +73,8 @@ class Query(graphene.ObjectType):
     def resolve_payments_by_premiums(self, info, **kwargs):
         if not info.context.user.has_perms(PaymentConfig.gql_query_payments_perms):
             raise PermissionDenied(_("unauthorized"))
-        premiums = contribution_models.Premium.objects.values_list('id').filter(Q(uuid__in=kwargs.get('premium_uuids')))
+        premiums = contribution_models.Premium.objects.values_list(
+            'id').filter(Q(uuid__in=kwargs.get('premium_uuids')))
         detail_ids = PaymentDetail.objects.values_list('payment_id').filter(Q(premium_id__in=premiums),
                                                                             *filter_validity(**kwargs)).distinct()
         return Payment.objects.filter(Q(id__in=detail_ids))
@@ -79,8 +87,10 @@ class Mutation(graphene.ObjectType):
 
 
 def bind_signals():
-    signal_mutation_module_before_mutating["policy"].connect(on_policy_mutation)
-    signal_mutation_module_before_mutating["payment"].connect(on_payment_mutation)
+    signal_mutation_module_before_mutating["policy"].connect(
+        on_policy_mutation)
+    signal_mutation_module_before_mutating["payment"].connect(
+        on_payment_mutation)
 
 
 def _get_additional_filter(sender, additional_filter, user):
