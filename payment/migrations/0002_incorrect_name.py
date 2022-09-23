@@ -20,7 +20,7 @@ BEGIN
 exec sp_rename 'contribution_PaymentMutation', 'payment_PaymentMutation', 'OBJECT'
 END
             """
-            if "sql_server" in settings.DB_ENGINE else
+            if settings.MSSQL else
             """
 DO $$
 BEGIN
