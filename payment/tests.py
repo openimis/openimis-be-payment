@@ -1,6 +1,7 @@
+from django.test import TestCase
+
 from contribution.test_helpers import create_test_premium
 from core.test_helpers import create_test_officer
-from django.test import TestCase
 from insuree.test_helpers import create_test_insuree
 from location.models import Location
 from medical.test_helpers import create_test_service
@@ -8,7 +9,7 @@ from medical_pricelist.test_helpers import add_service_to_hf_pricelist
 from payment.services import legacy_match_payment, validate_payment_detail, PAYMENT_DETAIL_REJECTION_INSURANCE_NB, \
     PAYMENT_DETAIL_REJECTION_PRODUCT_CODE, PAYMENT_DETAIL_REJECTION_INSURANCE_NB_INVALID, \
     PAYMENT_DETAIL_REJECTION_POLICY_NOT_FOUND, PAYMENT_DETAIL_REJECTION_PRODUCT_NOT_ALLOWED, \
-    PAYMENT_DETAIL_REJECTION_OFFICER_NOT_FOUND, PAYMENT_DETAIL_REJECTION_PRODUCT_LOCATION, match_payment
+    PAYMENT_DETAIL_REJECTION_PRODUCT_LOCATION, match_payment
 from payment.test_helpers import create_test_payment2
 from policy.models import Policy
 from policy.test_helpers import create_test_policy2
@@ -50,7 +51,6 @@ class PaymentServiceTestCase(TestCase):
         policy.insuree_policies.all().delete()
         policy.delete()
         product.delete()
-        insuree.delete()
         officer.delete()
 
     def test_validate_simple(self):
@@ -85,7 +85,6 @@ class PaymentServiceTestCase(TestCase):
         policy.insuree_policies.all().delete()
         policy.delete()
         product.delete()
-        insuree.delete()
         officer.delete()
 
     def test_validate_no_insuree(self):
@@ -118,7 +117,6 @@ class PaymentServiceTestCase(TestCase):
         policy.insuree_policies.all().delete()
         policy.delete()
         product.delete()
-        insuree.delete()
         officer.delete()
 
     def test_validate_no_product_code(self):
@@ -151,7 +149,6 @@ class PaymentServiceTestCase(TestCase):
         policy.insuree_policies.all().delete()
         policy.delete()
         product.delete()
-        insuree.delete()
         officer.delete()
 
     def test_validate_invalid_insuree_number(self):
@@ -184,7 +181,6 @@ class PaymentServiceTestCase(TestCase):
         policy.insuree_policies.all().delete()
         policy.delete()
         product.delete()
-        insuree.delete()
         officer.delete()
 
     def test_validate_invalid_policy(self):
@@ -218,7 +214,6 @@ class PaymentServiceTestCase(TestCase):
         policy.insuree_policies.all().delete()
         policy.delete()
         product.delete()
-        insuree.delete()
         officer.delete()
 
     def test_validate_invalid_officer_location(self):
@@ -255,7 +250,6 @@ class PaymentServiceTestCase(TestCase):
         policy.insuree_policies.all().delete()
         policy.delete()
         product.delete()
-        insuree.delete()
         officer.delete()
 
     def test_validate_invalid_product_location(self):
@@ -292,7 +286,6 @@ class PaymentServiceTestCase(TestCase):
         policy.insuree_policies.all().delete()
         policy.delete()
         product.delete()
-        insuree.delete()
         officer.delete()
 
     def test_match_payment_simple(self):
@@ -325,6 +318,5 @@ class PaymentServiceTestCase(TestCase):
         policy.insuree_policies.all().delete()
         policy.delete()
         product.delete()
-        insuree.delete()
         officer.delete()
 
