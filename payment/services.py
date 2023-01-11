@@ -138,7 +138,10 @@ def legacy_match_payment(payment_id=None, audit_user_id=-1):
             res = None
         else:
             info = cur.fetchall()  # FETCH 'SELECT @ret' returned value
+            cur.nextset()
+            feedback = cur.fetchall()
             logger.info("matchPayment result: %s", info)
+            logger.info("matchPayment logs: %s", str(feedback))
         if cur.nextset() and cur.description:
             res = cur.fetchone()[0]
         if res:
