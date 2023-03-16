@@ -1,7 +1,11 @@
 import graphene
 from graphene_django import DjangoObjectType
+
+from .apps import PaymentConfig
 from .models import Payment, PaymentDetail, PaymentMutation
 from core import prefix_filterset, ExtendedConnection
+from django.utils.translation import gettext as _
+from django.core.exceptions import PermissionDenied
 
 
 from contribution.schema import PremiumGQLType
@@ -39,6 +43,8 @@ class PaymentGQLType(DjangoObjectType):
         connection_class = ExtendedConnection
 
     def resolve_client_mutation_id(self, info):
+        if not info.context.user.has_perms(PaymentConfig.gql_query_payments_perms):
+            raise PermissionDenied(_("unauthorized"))
         payment_mutation = self.mutations.select_related(
             'mutation').filter(mutation__status=0).first()
         return payment_mutation.mutation.client_mutation_id if payment_mutation else None
