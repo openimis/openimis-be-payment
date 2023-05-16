@@ -76,7 +76,7 @@ class Payment(core_models.VersionedModel):
     # auditeduser_id = models.IntegerField(db_column='AuditedUSerID', blank=True, null=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblPayment'
 
     def __str__(self):
@@ -117,7 +117,7 @@ class PaymentDetail(core_models.VersionedModel):
         db_column='AuditedUserId', blank=True, null=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblPaymentDetails'
 
     def __str__(self):
