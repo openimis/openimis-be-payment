@@ -20,6 +20,7 @@ from product.test_helpers import create_test_product, create_test_product_servic
 # noinspection DuplicatedCode
 class PaymentServiceTestCase(TestCase):
     def test_call_to_legacy(self):
+        # TODO: Add matching test and procedure for PostgreSQL
         if not connection.vendor == 'mssql':
             self.skipTest("This test can only be executed for MSSQL database")
         officer = create_test_officer(custom_props={"code": "TSTSIMP1"})
