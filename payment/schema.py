@@ -36,6 +36,8 @@ class Query(graphene.ObjectType):
     )
 
     def resolve_payments(self, info, **kwargs):
+        if not info.context.user.has_perms(PaymentConfig.gql_query_payments_perms):
+            raise PermissionDenied(_("unauthorized"))
         filters = []
         # OFS-257: Create dynamic filters for the payment mutation
         additional_filter = kwargs.get('additional_filter', None)
