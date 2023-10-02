@@ -17,5 +17,5 @@ class Migration(migrations.Migration):
             alter table "tblPayment" add column if not exists "PayerPhoneNumber" character varying(50) NULL;
             alter table "tblPayment" add column if not exists "SmsRequired" bit NULL;
         """, reverse_sql=""),
-    ] if settings.MSSQL else [
+    ] if not settings.MSSQL else [
     ]
