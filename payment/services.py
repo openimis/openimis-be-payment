@@ -8,6 +8,7 @@ from django.db import connection
 from django.db.models import OuterRef, Sum, Q, Max
 from insuree.models import Insuree
 from location.apps import LocationConfig
+from location.models import LocationManager
 from payment.apps import PaymentConfig
 from payment.models import Payment, PaymentDetail
 from policy.apps import PolicyConfig
@@ -346,17 +347,12 @@ def validate_payment_detail(pd):
         return errors
 
     location_cursor = insuree.family.location
-    family_location_ids = []
-    if location_cursor:
-        for loc in LocationConfig.location_types:
-            family_location_ids.append(location_cursor.id)
-            location_cursor = location_cursor.parent
-            if location_cursor is None:
-                break
+    family_locations = LocationManager().parents(insuree.family.location.id)
+
 
     # Original code checked the product validity against current_date, I used the enroll_date instead
     product = Product.filter_queryset().filter(
-        Q(location_id__isnull=True) | Q(location_id__in=family_location_ids),
+        Q(location_id__isnull=True) | Q(location__in=family_locations),
         date_from__lte=policy.enroll_date,
         date_to__gte=policy.enroll_date,
         code=pd.product_code,
@@ -375,7 +371,7 @@ def validate_payment_detail(pd):
     officer = Officer.filter_queryset().filter(
         code=pd.payment.officer_code
     ).first()
-    if not product:
+    if not officer:
         errors += [{'code': PAYMENT_DETAIL_REJECTION_OFFICER_NOT_FOUND,
                     'message': _("payment.validation.detail.reject.officer_not_found") % {
                         'id': pd.id,
