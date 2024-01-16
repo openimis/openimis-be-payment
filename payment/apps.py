@@ -18,16 +18,14 @@ class PaymentConfig(AppConfig):
     gql_mutation_create_payments_perms = []
     gql_mutation_update_payments_perms = []
     gql_mutation_delete_payments_perms = []
-    default_validations_disabled = False
+    default_validations_disabled = None
 
-    def _configure_permissions(self, cfg):
-        PaymentConfig.gql_query_payments_perms = cfg["gql_query_payments_perms"]
-        PaymentConfig.gql_mutation_create_premiums_perms = cfg["gql_mutation_create_payments_perms"]
-        PaymentConfig.gql_mutation_update_premiums_perms = cfg["gql_mutation_update_payments_perms"]
-        PaymentConfig.gql_mutation_delete_premiums_perms = cfg["gql_mutation_delete_payments_perms"]
+    def __load_config(self, cfg):
+        for field in cfg:
+            if hasattr(PaymentConfig, field):
+                setattr(PaymentConfig, field, cfg[field])
 
     def ready(self):
         from core.models import ModuleConfiguration
         cfg = ModuleConfiguration.get_or_default(MODULE_NAME, DEFAULT_CFG)
-        self._configure_permissions(cfg)
-        PaymentConfig.default_validations_disabled = cfg["default_validations_disabled"]
+        self.__load_config(cfg)
