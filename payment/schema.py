@@ -44,7 +44,7 @@ class Query(graphene.ObjectType):
         # go to process additional filter only when this arg of filter was passed into query
         if additional_filter:
             filters_from_signal = _get_additional_filter(
-                sender=self, additional_filter=additional_filter, user=info.context.user
+                sender=Payment, additional_filter=additional_filter, user=info.context.user
             )
             # check if there is filter from signal (perms will be checked in the signals)
             if len(filters_from_signal) == 0:
