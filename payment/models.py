@@ -94,7 +94,7 @@ class PaymentDetail(core_models.VersionedModel):
     product_code = models.CharField(
         db_column='ProductCode', max_length=8, blank=True, null=True)
     insurance_number = models.CharField(
-        db_column='InsuranceNumber', max_length=12, blank=True, null=True)  # CHF_ID
+        db_column='InsuranceNumber', max_length=50, blank=True, null=True)  # CHF_ID
 
     policy_stage = models.CharField(
         db_column='PolicyStage', max_length=1, blank=True, null=True)
