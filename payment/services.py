@@ -16,6 +16,7 @@ from policy.models import Policy
 from policy.services import update_insuree_policies
 from policy.values import policy_values, set_start_date, set_expiry_date
 from product.models import Product
+from core.models.user import User
 
 logger = logging.getLogger(__file__)
 
@@ -152,6 +153,7 @@ def legacy_match_payment(payment_id=None, audit_user_id=-1):
 def match_payment(payment_id=None, payment=None, audit_user_id=None):
     if payment is None:
         payment = Payment.filter_queryset().get(id=payment_id)
+    user = User.objects.filter(Q(audit_user_id=audit_user_id) | Q(id=audit_user_id)).first()
 
     payment_details = payment.payment_details.filter(validity_to__isnull=True)
 
@@ -224,7 +226,7 @@ def match_payment(payment_id=None, payment=None, audit_user_id=None):
                     pd.policy.save()
 
                     for insuree in pd.insuree.family.members.filter(validity_to__isnull=True):
-                        update_insuree_policies(pd.policy, audit_user_id)
+                        update_insuree_policies(pd.policy, user)
                     processed[pd.policy.id] = True
                 else:
                     # increment matched payment ?
