@@ -153,7 +153,7 @@ def legacy_match_payment(payment_id=None, audit_user_id=-1):
 def match_payment(payment_id=None, payment=None, audit_user_id=None):
     if payment is None:
         payment = Payment.filter_queryset().get(id=payment_id)
-    user = User.objects.filter(Q(audit_user_id=audit_user_id) | Q(id=audit_user_id)).first()
+    user = User.objects.filter(i_user=audit_user_id).first()
 
     payment_details = payment.payment_details.filter(validity_to__isnull=True)
 
