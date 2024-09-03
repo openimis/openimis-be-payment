@@ -13,6 +13,15 @@ def create_test_payment2(insuree_code=None, product_code=None, officer_code=None
     :param detail_custom_props: dictionary of custom values for the PaymentDetail
     :return: The created Payment and PaymentDetail
     """
+    if custom_props is None:
+        custom_props = {}
+    else:
+        custom_props = {k: v for k, v in custom_props.items() if hasattr(Payment, k)}
+    if detail_custom_props is None:
+        detail_custom_props = {}
+    else:
+        detail_custom_props = {k: v for k, v in detail_custom_props.items() if hasattr(PaymentDetail, k)}
+
     payment = Payment.objects.create(
         **{
             "received_amount": "1000",
@@ -22,7 +31,7 @@ def create_test_payment2(insuree_code=None, product_code=None, officer_code=None
             "validity_to": None,
             "officer_code": officer_code,
             "status": Payment.STATUS_UNMATCHED,
-            **(custom_props if custom_props else {})
+            **custom_props
         }
     )
     if link:
@@ -35,8 +44,10 @@ def create_test_payment2(insuree_code=None, product_code=None, officer_code=None
             insurance_number=insuree_code,
             policy_stage='N',
             amount="1000",
-            **(detail_custom_props if detail_custom_props else {})
+            **detail_custom_props
         )
     else:
         payment_detail = None
+
+
     return payment, payment_detail
