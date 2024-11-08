@@ -7,7 +7,7 @@ from payment.services import detach_payment_detail
 from .apps import PaymentConfig
 from django.utils.translation import gettext as _
 from core.schema import signal_mutation_module_before_mutating, OrderedDjangoFilterConnectionField, filter_validity
-from core.service import wait_for_mutation
+from core.services import wait_for_mutation
 from contribution import models as contribution_models
 from .models import Payment, PaymentDetail
 # We do need all queries and mutations in the namespace here.
