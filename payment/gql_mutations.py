@@ -1,4 +1,5 @@
 from django.contrib.auth.models import AnonymousUser
+from django.db import transaction
 from django.core.exceptions import ValidationError, PermissionDenied
 from payment.apps import PaymentConfig
 from payment.models import Payment, PaymentMutation
@@ -86,10 +87,11 @@ class UpdatePaymentMutation(OpenIMISMutation):
                     _("mutation.authentication_required"))
             if not user.has_perms(PaymentConfig.gql_mutation_update_payments_perms):
                 raise PermissionDenied(_("unauthorized"))
-            premium_uuid = data.pop("premium_uuid") if "premium_uuid" in data else None
-            payment = update_or_create_payment(data, user)
-            if premium_uuid:
-                update_or_create_payment_detail(payment, premium_uuid, user)
+            premium_uuid = data.pop("premium_uuid", None)
+            with transaction.atomic():
+                payment = update_or_create_payment(data, user,  premium_uuid is None)
+                if premium_uuid:
+                    update_or_create_payment_detail(payment, premium_uuid, user)
             return None
         except Exception as exc:
             return [{
