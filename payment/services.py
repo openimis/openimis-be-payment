@@ -1,7 +1,7 @@
 import logging
 from django.db.models import Q
 from gettext import gettext as _
-
+from django.db import transaction
 from contribution.models import Premium, PayTypeChoices
 from core.models import Officer
 from django.db import connection
@@ -72,7 +72,7 @@ def reset_payment_before_update(payment):
     payment.transfer_fee = None
 
 
-def update_or_create_payment(data, user):
+def update_or_create_payment(data, user, carry_over_details=False):
     if "client_mutation_id" in data:
         data.pop('client_mutation_id')
     if "client_mutation_label" in data:
@@ -87,9 +87,20 @@ def update_or_create_payment(data, user):
     if payment_uuid:
         payment = Payment.objects.get(uuid=payment_uuid)
         payment.save_history()
+        old_payment_id=payment.id
         reset_payment_before_update(payment)
         [setattr(payment, k, v) for k, v in data.items()]
         payment.save()
+        if carry_over_details:
+            details = PaymentDetail.objects.filter(
+                payment = Payment.objects.get(uuid=payment_uuid)
+            )
+            for d in details:
+                d.payment_id=old_payment_id
+                d.save_history()
+                d.payment=payment
+                d.audit_user_id=user._u.id
+                d.save()              
     else:
         payment = Payment.objects.create(**data)
     return payment
